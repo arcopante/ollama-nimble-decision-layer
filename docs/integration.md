@@ -2,47 +2,140 @@
 
 El flujo es: **estado → preguntas → respuesta tipada → reglas del programa → acción**. `/v1/systemone` devuelve decisiones; el programa que lo integra ejecuta las acciones.
 
-## Petición mínima en PowerShell
+## Petición mínima
 
 Con Ollama y Nimble preparados, ejecuta desde la raíz del proyecto:
 
-```powershell
-$json = Get-Content -LiteralPath .\examples\request.json -Raw -Encoding UTF8
-$response = Invoke-RestMethod -Uri 'http://localhost:11434/v1/systemone' -Method Post -ContentType 'application/json; charset=utf-8' -Body ([Text.Encoding]::UTF8.GetBytes($json)) -TimeoutSec 300
-$response.answers.solicita_reembolso.noul
-```
+=== "PowerShell (Windows)"
 
-La codificación explícita UTF-8 conserva tildes y eñes en Windows PowerShell 5.1.
+    ```powershell
+    $json = Get-Content -LiteralPath .\examples\request.json -Raw -Encoding UTF8
+    $response = Invoke-RestMethod -Uri 'http://localhost:11434/v1/systemone' -Method Post -ContentType 'application/json; charset=utf-8' -Body ([Text.Encoding]::UTF8.GetBytes($json)) -TimeoutSec 300
+    $response.answers.solicita_reembolso.noul
+    ```
+
+    La codificación explícita UTF-8 conserva tildes y eñes en Windows PowerShell 5.1.
+
+=== "curl (Linux/macOS/WSL)"
+
+    ```bash
+    curl -s -X POST http://localhost:11434/v1/systemone \
+      -H "Content-Type: application/json; charset=utf-8" \
+      --data-binary @examples/request.json
+    ```
+
+=== "Python"
+
+    ```python
+    import requests
+    with open("examples/request.json", encoding="utf-8") as f:
+        payload = requests.utils.json.loads(f.read())
+    r = requests.post(
+        "http://localhost:11434/v1/systemone",
+        json=payload,
+        timeout=300,
+    )
+    r.raise_for_status()
+    print(r.json()["answers"]["solicita_reembolso"]["noul"])
+    ```
 
 ## Routing, clasificación y otro agente
 
 Para elegir una ruta entre varias, usa una pregunta `choice`. Este ejemplo solo imprime el destino; conecta después cada ruta con un agente o cola que exista en tu sistema.
 
-```powershell
-$request = @{
-    model = 'nimble:latest'
-    state = 'Me han cobrado dos veces y necesito un reembolso.'
-    questions = @{
-        destino = @{
-            type = 'choice'
-            instructions = 'Selecciona el equipo principal para este ticket.'
-            criteria = @{
-                facturacion = 'Pagos, cargos, facturas y reembolsos.'
-                soporte_tecnico = 'Errores y fallos de funcionamiento.'
-                sin_coincidencia = 'Información insuficiente o ninguna categoría adecuada.'
+=== "PowerShell (Windows)"
+
+    ```powershell
+    $request = @{
+        model = 'nimble:latest'
+        state = 'Me han cobrado dos veces y necesito un reembolso.'
+        questions = @{
+            destino = @{
+                type = 'choice'
+                instructions = 'Selecciona el equipo principal para este ticket.'
+                criteria = @{
+                    facturacion = 'Pagos, cargos, facturas y reembolsos.'
+                    soporte_tecnico = 'Errores y fallos de funcionamiento.'
+                    sin_coincidencia = 'Información insuficiente o ninguna categoría adecuada.'
+                }
             }
         }
+        keep_alive = '30m'
     }
-    keep_alive = '30m'
-}
-$json = $request | ConvertTo-Json -Depth 20
-$response = Invoke-RestMethod -Uri 'http://localhost:11434/v1/systemone' -Method Post -ContentType 'application/json; charset=utf-8' -Body ([Text.Encoding]::UTF8.GetBytes($json)) -TimeoutSec 300
-switch ($response.answers.destino.choice) {
-    'facturacion' { 'Destino: agente o cola de facturación' }
-    'soporte_tecnico' { 'Destino: agente o cola de soporte técnico' }
-    default { 'Destino: revisión humana' }
-}
-```
+    $json = $request | ConvertTo-Json -Depth 20
+    $response = Invoke-RestMethod -Uri 'http://localhost:11434/v1/systemone' -Method Post -ContentType 'application/json; charset=utf-8' -Body ([Text.Encoding]::UTF8.GetBytes($json)) -TimeoutSec 300
+    switch ($response.answers.destino.choice) {
+        'facturacion' { 'Destino: agente o cola de facturación' }
+        'soporte_tecnico' { 'Destino: agente o cola de soporte técnico' }
+        default { 'Destino: revisión humana' }
+    }
+    ```
+
+=== "curl (Linux/macOS/WSL)"
+
+    ```bash
+    curl -s -X POST http://localhost:11434/v1/systemone \
+      -H "Content-Type: application/json; charset=utf-8" \
+      -d '{
+        "model": "nimble:latest",
+        "state": "Me han cobrado dos veces y necesito un reembolso.",
+        "questions": {
+          "destino": {
+            "type": "choice",
+            "instructions": "Selecciona el equipo principal para este ticket.",
+            "criteria": {
+              "facturacion": "Pagos, cargos, facturas y reembolsos.",
+              "soporte_tecnico": "Errores y fallos de funcionamiento.",
+              "sin_coincidencia": "Información insuficiente o ninguna categoría adecuada."
+            }
+          }
+        },
+        "keep_alive": "30m"
+      }' | python3 -c "
+    import json, sys
+    data = json.load(sys.stdin)
+    choice = data['answers']['destino']['choice']
+    routes = {
+        'facturacion': 'Destino: agente o cola de facturación',
+        'soporte_tecnico': 'Destino: agente o cola de soporte técnico'
+    }
+    print(routes.get(choice, 'Destino: revisión humana'))
+    "
+    ```
+
+=== "Python"
+
+    ```python
+    import requests
+
+    response = requests.post(
+        "http://localhost:11434/v1/systemone",
+        json={
+            "model": "nimble:latest",
+            "state": "Me han cobrado dos veces y necesito un reembolso.",
+            "questions": {
+                "destino": {
+                    "type": "choice",
+                    "instructions": "Selecciona el equipo principal para este ticket.",
+                    "criteria": {
+                        "facturacion": "Pagos, cargos, facturas y reembolsos.",
+                        "soporte_tecnico": "Errores y fallos de funcionamiento.",
+                        "sin_coincidencia": "Información insuficiente o ninguna categoría adecuada.",
+                    },
+                }
+            },
+            "keep_alive": "30m",
+        },
+        timeout=300,
+    )
+    response.raise_for_status()
+    choice = response.json()["answers"]["destino"]["choice"]
+    routes = {
+        "facturacion": "Destino: agente o cola de facturación",
+        "soporte_tecnico": "Destino: agente o cola de soporte técnico",
+    }
+    print(routes.get(choice, "Destino: revisión humana"))
+    ```
 
 La respuesta incluye `choice`, `probabilities` y `confidence`. `confidence` mide la concentración de las probabilidades; no es una garantía de acierto. Si varias categorías pueden ser relevantes a la vez, usa preguntas `noul` separadas como la demo y define en tu programa la prioridad de las rutas.
 

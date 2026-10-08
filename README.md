@@ -163,6 +163,7 @@ Ver [`docs/integration.md`](docs/integration.md) para:
 - Escalado (cuándo pasar a humano)
 - Moderación (detección de abuso/spam)
 - `choice` questions (decisiones multi-opción)
+- Ejemplos en PowerShell, curl (bash) y Python
 
 Ejemplo de routing con `choice`:
 
